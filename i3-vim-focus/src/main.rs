@@ -1,5 +1,6 @@
 //! A rust implementation of i3_vim_focus
 //!
+//!
 //! Original version from
 //! https://faq.i3wm.org/question/3042/change-the-focus-of-windows-within-vim-and-i3-with-the-same-keystroke/
 //!
@@ -13,11 +14,15 @@ extern crate i3ipc;
 
 #[macro_use]
 extern crate log;
+extern crate flexi_logger;
+extern crate getopts;
 
 use std::env;
 use std::str::FromStr;
+use flexi_logger::{Logger, opt_format};
 use std::error::Error;
 use std::fmt;
+use getopts::Options;
 
 
 enum Direction {
@@ -104,7 +109,7 @@ fn xdo_i3_calls(name: &str, direction: Direction) -> Result<String, FocusError> 
                 Ok(window_name) => {
                     info!("Window name = {:?}", window_name);
 
-                    if window_name.to_lowercase().contains("vim") {
+                    if window_name.contains("VIM") {
                         let sequence = format!("Escape+g+w+{}", direction.to_vim_direction());
                         let mods = xdo.get_active_modifiers()?;
                         window.clear_active_modifiers(&mods)?;
@@ -132,11 +137,50 @@ fn xdo_i3_calls(name: &str, direction: Direction) -> Result<String, FocusError> 
     Ok(format!("Result = {:?}", result))
 }
 
+fn print_usage(program: &str, opts: Options) {
+    let brief = format!("Usage: {} left|up|down|right [options]", program);
+    print!("{}", opts.usage(&brief));
+}
+
 fn main() {
 
-    let name = env::args().nth(1)
-        .expect("direction was specified")
-        .to_ascii_lowercase();
+    let args: Vec<String> = env::args().collect();
+    let program = args[0].clone();
+
+    let mut opts = Options::new();
+    opts.optopt("o", "logdir", "set log output file directory (for now the logger insists on naming the the logfile with the name of the currently running executable `i3-vim-focus`", "LOGDIR");
+    opts.optflag("h", "help", "print this help menu");
+
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => { m }
+        Err(f) => { panic!(f.to_string()) }
+    };
+
+    if matches.opt_present("h") {
+        print_usage(&program, opts);
+        return;
+    }
+
+    let opt_matches = matches.opt_str("o").or(matches.opt_str("logdir"));
+
+    if let Some(log_output_dir) = opt_matches {
+        Logger::with_env_or_str("i3_vim_focus, i3ipc")
+                    .log_to_file()
+                    .directory(log_output_dir)
+                    .suppress_timestamp()
+                    .format(opt_format)
+                    .start()
+                    .unwrap_or_else(|e|{panic!("Logger initialization failed with {:?}",e)});
+    }
+
+    let input = if !matches.free.is_empty() {
+        matches.free[0].clone()
+    } else {
+        print_usage(&program, opts);
+        return;
+    };
+
+    let name = input.to_ascii_lowercase();
 
     info!("Direction name: {}", name);
 
