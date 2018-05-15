@@ -114,7 +114,12 @@ fn xdo_i3_calls(name: &str, direction: Direction) -> Result<String, FocusError> 
                         let mods = xdo.get_active_modifiers()?;
                         window.clear_active_modifiers(&mods)?;
                         window.send_keysequence(&sequence, None)?;
-                        window.set_active_modifiers(&mods)?;
+
+                        if let Ok(new_window) = xdo.get_active_window() {
+                            new_window.set_active_modifiers(&mods)?;
+                        } else {
+                            info!("Error getting new active window");
+                        }
 
                         return Ok(format!("Vim sequence {:?} sent", sequence))
                     }
