@@ -98,7 +98,7 @@ impl From<i3ipc::MessageError> for FocusError {
     }
 }
 
-fn xdo_i3_calls(name: &str, direction: Direction) -> Result<String, FocusError> {
+fn xdo_i3_calls(name: &str, direction: Direction, move_window: bool) -> Result<String, FocusError> {
     let xdo = xdo::Xdo::new()?;
 
     match xdo.get_active_window() {
@@ -110,7 +110,10 @@ fn xdo_i3_calls(name: &str, direction: Direction) -> Result<String, FocusError> 
                     info!("Window name = {:?}", window_name);
 
                     if window_name.contains("VIM") {
-                        let sequence = format!("Escape+g+w+{}", direction.to_vim_direction());
+                        let sequence = match move_window {
+                            true => format!("Escape+g+m+{}", direction.to_vim_direction()),
+                            false => format!("Escape+g+w+{}", direction.to_vim_direction()),
+                        };
                         let mods = xdo.get_active_modifiers()?;
                         window.clear_active_modifiers(&mods)?;
                         window.send_keysequence(&sequence, None)?;
@@ -135,7 +138,10 @@ fn xdo_i3_calls(name: &str, direction: Direction) -> Result<String, FocusError> 
     };
 
     let mut conn = i3ipc::I3Connection::connect()?;
-    let command = format!("focus {}", name);
+    let command = match move_window {
+        true => format!("move {}", name),
+        false => format!("focus {}", name),
+    };
     let result = conn.command(&command)?;
     info!("command sent = {}", command);
     info!("result = {:?}", result);
@@ -154,6 +160,7 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optopt("o", "logdir", "set log output file directory (for now the logger insists on naming the the logfile with the name of the currently running executable `i3-vim-focus`", "LOGDIR");
+    opts.optflag("m", "move", "Move the focused window");
     opts.optflag("h", "help", "print this help menu");
 
     let matches = match opts.parse(&args[1..]) {
@@ -161,14 +168,14 @@ fn main() {
         Err(f) => { panic!(f.to_string()) }
     };
 
-    if matches.opt_present("h") {
+    if matches.opt_present("h") || matches.opt_present("help") {
         print_usage(&program, opts);
         return;
     }
 
-    let opt_matches = matches.opt_str("o").or(matches.opt_str("logdir"));
+    let log_opt = matches.opt_str("o").or(matches.opt_str("logdir"));
 
-    if let Some(log_output_dir) = opt_matches {
+    if let Some(log_output_dir) = log_opt {
         Logger::with_env_or_str("i3_vim_focus, i3ipc")
                     .log_to_file()
                     .directory(log_output_dir)
@@ -185,6 +192,8 @@ fn main() {
         return;
     };
 
+    let move_window = matches.opt_present("m") || matches.opt_present("move");
+
     let name = input.to_ascii_lowercase();
 
     info!("Direction name: {}", name);
@@ -194,7 +203,7 @@ fn main() {
         Ok(d) => d
     };
 
-    let result = xdo_i3_calls(&name[..], direction);
+    let result = xdo_i3_calls(&name[..], direction, move_window);
     match result {
         Err(e) => { error!("Error Running i3-vim-focus: {:?}", e); },
         Ok(s) => { info!("i3-vim-focus successfully ran: {:?}", s); },
