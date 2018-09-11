@@ -111,8 +111,8 @@ fn xdo_i3_calls(name: &str, direction: Direction, move_window: bool) -> Result<S
 
                     if window_name.contains("VIM") {
                         let sequence = match move_window {
-                            true => format!("Escape+g+m+{}", direction.to_vim_direction()),
-                            false => format!("Escape+g+w+{}", direction.to_vim_direction()),
+                            true => format!("escape+g+m+{}", direction.to_vim_direction()),
+                            false => format!("escape+g+w+{}", direction.to_vim_direction()),
                         };
                         let mods = xdo.get_active_modifiers()?;
                         window.clear_active_modifiers(&mods)?;
